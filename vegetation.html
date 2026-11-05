@@ -1,0 +1,203 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Vegetation series: time per stage for one job of each pipeline</title>
+<style>
+  :root { --surface: #fcfcfb; --ink: #0b0b0b; --ink2: #52514e; --grid: #e4e3df; }
+  body { margin: 0; padding: 16px 20px; background: var(--surface); color: var(--ink);
+         font: 13px/1.4 -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", sans-serif; }
+  h1 { font-size: 16px; margin: 0 0 2px; }
+  .sub, .foot { color: var(--ink2); font-size: 12px; }
+  .wrap { margin-top: 10px; }
+  svg { width: 100%; overflow: visible; display: block; margin-top: 8px; }
+  .seg { cursor: pointer; transition: opacity .12s; }
+  .dim .seg:not(.on) { opacity: .18; }
+  .filters { display: flex; gap: 6px; margin-top: 10px; }
+  .filters button { font: inherit; font-size: 12px; padding: 3px 10px; border: 1px solid var(--grid); border-radius: 14px;
+                    background: #fff; color: var(--ink); cursor: pointer; }
+  .filters button.on { background: var(--ink); border-color: var(--ink); color: #fff; }
+  .legend li.hidden { display: none; }
+  .legend { margin-top: 8px !important; display: flex; flex-wrap: wrap; gap: 2px 10px; list-style: none; margin: 0; padding: 0; font-size: 11px; }
+  .legend li { display: flex; gap: 5px; align-items: center; padding: 2px 4px; border-radius: 4px;
+               cursor: pointer; transition: opacity .12s; }
+  .legend .sw { flex: 0 0 10px; height: 10px; border-radius: 2px; }
+  .legend .kind { color: var(--ink2); }
+  .legend.dim li:not(.on) { opacity: .3; }
+  #tip { position: fixed; pointer-events: none; background: #fff; border: 1px solid var(--grid); border-radius: 6px;
+         padding: 6px 9px; box-shadow: 0 2px 8px rgba(0,0,0,.12); font-size: 12px; display: none; max-width: 260px; }
+  #tip b { display: block; }
+  .tick { fill: var(--ink2); font-size: 11px; }
+  .glabel { fill: var(--ink); font-size: 13px; font-weight: 600; }
+  .blabel { fill: var(--ink2); font-size: 12px; }
+  .total { fill: var(--ink); font-size: 12px; font-weight: 600; }
+  .brk { fill: var(--ink2); font-size: 11px; }
+  details { margin-top: 10px; font-size: 12px; }
+  table { border-collapse: collapse; margin-top: 6px; }
+  td, th { border-bottom: 1px solid var(--grid); padding: 3px 8px; text-align: right; }
+  td:first-child, th:first-child { text-align: left; }
+</style>
+</head>
+<body>
+<h1>Vegetation series: time per stage for one job of each pipeline</h1>
+<div class="sub">Working days of 8 h, one job of ~50 areas. Hover a colour to see the stage and highlight it in every bar.</div>
+<div class="filters" id="filters"></div>
+<div class="wrap"><ul class="legend" id="legend"></ul><svg id="chart" role="img" aria-label="Vegetation series: time per stage for one job of each pipeline"></svg></div>
+<div class="foot">Pipelines run in series. TBD stages count as 0; hover a segment to see which stages are TBD. Very short stages are drawn at a minimum width so they stay visible. Excludes one-off setup and unexpected blockers.</div>
+<details><summary>Data table</summary><div id="table"></div></details>
+<div id="tip"></div>
+<script>
+const SPEC = {"title": "Vegetation series: time per stage for one job of each pipeline", "subtitle": "Working days of 8 h, one job of ~50 areas. Hover a colour to see the stage and highlight it in every bar.", "stages": [{"name": "Data acquisition (action)", "color": "#2a78d6", "kind": "PM / internal", "note": ""}, {"name": "Data acquisition (wait)", "color": "#a3a29c", "kind": "Wait", "note": ""}, {"name": "Data / project setup", "color": "#eb6834", "kind": "PM / internal", "note": ""}, {"name": "Data selection", "color": "#1baf7a", "kind": "PM / internal", "note": ""}, {"name": "Contractor job creation", "color": "#eda100", "kind": "PM / internal", "note": ""}, {"name": "Contractor queue (wait)", "color": "#cfcec9", "kind": "Wait", "note": ""}, {"name": "Contractor work (contractor)", "color": "#e87ba4", "kind": "Contractor", "note": "approx. group of 5 contractors"}, {"name": "Contractor work (PM)", "color": "#008300", "kind": "PM / internal", "note": ""}, {"name": "Review / QA", "color": "#6250d6", "kind": "PM / internal", "note": ""}, {"name": "Data processing + download", "color": "#e34948", "kind": "PM / internal", "note": ""}], "groups": [{"name": "PC Veg 2.1 Classification", "bars": [{"case": "Best case", "values": [0.125, 1, 0.0625, 0.5208, 0.0312, 1, 3, 0.1667, 1.0417, 0.0417]}, {"case": "Normal case", "values": [0.375, 3, 0.125, 1.0417, 0.0625, 3, 5, 0.4167, 3.125, 0.0521]}], "total": false}, {"name": "PC Instance Segmentation", "bars": [{"case": "Best case", "values": [0, 0, 0.0312, 0, 0.0625, 1, 3, 0.1667, 1.0417, 0.0417]}, {"case": "Normal case", "values": [0, 0, 0.0312, 0, 0.0625, 3, 5, 0.4167, 3.125, 0.0521]}], "total": false}, {"name": "Multimodal Tree Type Labelling", "bars": [{"case": "Best case", "values": [null, null, 0.0312, 0, 0.0625, 1, null, 0.1667, null, 0.0417]}, {"case": "Normal case", "values": [null, null, 0.0312, 0, 0.0625, 3, null, 0.4167, null, 0.0521]}], "total": false}, {"name": "Series total", "bars": [{"case": "Best case", "values": [0.125, 1, 0.125, 0.5208, 0.1562, 3, 6, 0.5, 2.0833, 0.125]}, {"case": "Normal case", "values": [0.375, 3, 0.1875, 1.0417, 0.1875, 9, 10, 1.25, 6.25, 0.1562]}], "total": true}], "footnote": "Pipelines run in series. TBD stages count as 0; hover a segment to see which stages are TBD. Very short stages are drawn at a minimum width so they stay visible. Excludes one-off setup and unexpected blockers."};
+const NS = "http://www.w3.org/2000/svg";
+const fmt = (v) => (Math.round(v * 100) / 100).toString();
+const sum = (xs) => xs.reduce((a, b) => a + (b || 0), 0);
+
+function el(tag, attrs, parent, text) {
+  const node = document.createElementNS(NS, tag);
+  for (const [k, v] of Object.entries(attrs)) node.setAttribute(k, v);
+  if (text !== undefined) node.textContent = text;
+  parent.appendChild(node);
+  return node;
+}
+
+function breakdown(values) {
+  const by = {}, tbd = {};
+  SPEC.stages.forEach((s, i) => {
+    by[s.kind] = (by[s.kind] || 0) + (values[i] || 0);
+    tbd[s.kind] = tbd[s.kind] || values[i] === null;
+  });
+  return ["PM / internal", "Contractor", "Wait"].map((k) => {
+    const v = !by[k] && tbd[k] ? "TBD" : fmt(by[k] || 0) + (tbd[k] ? " + TBD" : "");
+    return k.split(" ")[0] + " " + v;
+  }).join("  ·  ");
+}
+
+function tbdNames(values) {
+  return SPEC.stages.filter((s, i) => values[i] === null).map((s) => s.name);
+}
+
+const svg = document.getElementById("chart");
+const legend = document.getElementById("legend");
+const tip = document.getElementById("tip");
+const LEFT = 70, RIGHT = 230, BAR = 30, GAP = 6, GROUP_GAP = 18, MIN_PX = 7;
+let segs = [];
+
+const KINDS = ["PM / internal", "Contractor", "Wait"];
+let only = null;  // a stage kind to isolate, or null for all
+
+// Values with stages of other kinds zeroed; TBD (null) is kept only for the isolated kind.
+function shown(values) {
+  return values.map((v, i) => (!only || SPEC.stages[i].kind === only ? v : 0));
+}
+
+function buildFilters() {
+  const box = document.getElementById("filters");
+  for (const kind of [null, ...KINDS]) {
+    const b = document.createElement("button");
+    b.textContent = kind ? kind + " only" : "All";
+    b.classList.toggle("on", kind === only);
+    b.addEventListener("click", () => {
+      only = kind;
+      box.querySelectorAll("button").forEach((x) => x.classList.toggle("on", x === b));
+      items.forEach((li) => li.classList.toggle("hidden", !!only && SPEC.stages[+li.dataset.stage].kind !== only));
+      clear();
+      render();
+    });
+    box.appendChild(b);
+  }
+}
+
+function render() {
+  svg.innerHTML = "";
+  segs = [];
+  const W = Math.max(svg.clientWidth, 560);
+  const plotW = W - LEFT - RIGHT;
+  const maxTotal = Math.max(...SPEC.groups.flatMap((g) => g.bars.map((b) => sum(shown(b.values)))), 0.1);
+  const x = (v) => (v / maxTotal) * (plotW - MIN_PX * SPEC.stages.length);  // room for minimum widths
+
+  let y = 8;
+  const ticks = el("g", {}, svg);
+  for (const group of SPEC.groups) {
+    el("text", { x: 0, y: y + 12, class: "glabel" }, svg, group.name);
+    y += 20;
+    for (const bar of group.bars) {
+      el("text", { x: LEFT - 10, y: y + BAR / 2 + 4, "text-anchor": "end", class: "blabel" }, svg, bar.case.replace(" case", ""));
+      let left = LEFT;
+      shown(bar.values).forEach((v, i) => {
+        if (!v) return;
+        const s = SPEC.stages[i];
+        const w = Math.max(x(v), MIN_PX);  // tiny stages get a minimum width so they stay visible and hoverable
+        const r = el("rect", { x: left, y, width: w - 2, height: BAR, rx: 3, fill: s.color,
+                               class: "seg", "data-stage": i }, svg);
+        r.addEventListener("mousemove", (e) => showTip(e, group.name, bar.case, i, v));
+        r.addEventListener("mouseleave", clear);
+        segs.push(r);
+        left += w;
+      });
+      const total = sum(shown(bar.values));
+      const tbd = tbdNames(shown(bar.values));
+      el("text", { x: left + 8, y: y + 13, class: "total" }, svg, fmt(total) + " days" + (tbd.length ? " + TBD" : ""));
+      el("text", { x: left + 8, y: y + 26, class: "brk" }, svg, only ? only + " time only" : breakdown(bar.values));
+      y += BAR + GAP;
+    }
+    y += GROUP_GAP;
+  }
+  for (let t = 0; t <= maxTotal; t += maxTotal > 20 ? 5 : maxTotal > 8 ? 2 : maxTotal > 3 ? 1 : 0.5) {
+    el("line", { x1: LEFT + x(t), x2: LEFT + x(t), y1: 0, y2: y - GROUP_GAP, stroke: "var(--grid)" }, ticks);
+    el("text", { x: LEFT + x(t), y: y - GROUP_GAP + 14, "text-anchor": "middle", class: "tick" }, ticks, t);
+  }
+  el("text", { x: LEFT + plotW / 2, y: y - GROUP_GAP + 30, "text-anchor": "middle", class: "tick" }, ticks,
+     "Working days");
+  svg.setAttribute("height", y - GROUP_GAP + 38);
+
+}
+
+render();
+window.addEventListener("resize", render);
+
+const items = SPEC.stages.map((s, i) => {
+  const li = document.createElement("li");
+  li.dataset.stage = i;
+  li.innerHTML = `<span class="sw" style="background:${s.color}"></span><span>${s.name}</span>`;
+  li.addEventListener("mouseenter", () => highlight(i));
+  li.addEventListener("mouseleave", clear);
+  legend.appendChild(li);
+  return li;
+});
+
+buildFilters();
+
+function highlight(i) {
+  svg.classList.add("dim");
+  legend.classList.add("dim");
+  segs.forEach((r) => r.classList.toggle("on", +r.dataset.stage === i));
+  items.forEach((li) => li.classList.toggle("on", +li.dataset.stage === i));
+}
+
+function clear() {
+  svg.classList.remove("dim");
+  legend.classList.remove("dim");
+  tip.style.display = "none";
+}
+
+function showTip(e, group, kase, i, v) {
+  highlight(i);
+  const hours = Math.round(v * 8 * 10) / 10;
+  tip.innerHTML = `<b>${SPEC.stages[i].name}</b>${fmt(v)} working days (${hours} h)`;
+  tip.style.display = "block";
+  const pad = 14;
+  const left = Math.min(e.clientX + pad, window.innerWidth - tip.offsetWidth - 4);
+  const top = Math.min(e.clientY + pad, window.innerHeight - tip.offsetHeight - 4);
+  tip.style.left = left + "px";
+  tip.style.top = top + "px";
+}
+
+const head = "<tr><th>Stage</th>" + SPEC.groups.flatMap((g) => g.bars.map((b) => `<th>${g.name}<br>${b.case}</th>`))
+  .join("") + "</tr>";
+const body = SPEC.stages.map((s, i) => `<tr><td>${s.name}</td>` + SPEC.groups.flatMap((g) => g.bars.map((b) =>
+  `<td>${b.values[i] === null ? "TBD" : fmt(b.values[i] || 0)}</td>`)).join("") + "</tr>").join("");
+document.getElementById("table").innerHTML = `<table>${head}${body}</table>`;
+</script>
+</body>
+</html>
