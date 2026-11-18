@@ -1,0 +1,599 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>LSM Data Engine: wheels and focus</title>
+<style>
+.viz-root {
+  color-scheme: light;
+  --surface-0: #f3f2ef;
+  --surface-1: #fcfcfb;
+  --border: #e2e1dc;
+  --grid: #ebeae6;
+  --text-primary: #0b0b0b;
+  --text-secondary: #52514e;
+  --text-muted: #85847f;
+  --s-acq: #007c9c;
+  --s-setup: #22c0d0;
+  --s-sel: #1d63c9;
+  --s-job: #5b9ef5;
+  --s-pmwork: #4143c9;
+  --s-review: #8b6ef0;
+  --s-proc: #0aa3bf;
+  --s-contractor: #e8742e;
+  --s-wait: #d6d5cf;
+  --s-wait-warm: #f6c7a8;
+  --st-1: #e4e3de;
+  --st-2: #c9c8c1;
+  --st-3: #a3a29a;
+  --st-4: #6e6d67;
+  --st-5: #2b2b29;
+  --critical: #d03b3b;
+  --b-setup-bg: #fcfcfb; --b-setup-fg: #0b0b0b; --b-setup-bd: #0b0b0b;
+  --b-spin-bg: #6e6d67;  --b-spin-fg: #ffffff;  --b-spin-bd: #6e6d67;
+  --b-opt-bg: #0b0b0b;   --b-opt-fg: #ffffff;   --b-opt-bd: #0b0b0b;
+  --b-fix-bg: #d03b3b;   --b-fix-fg: #ffffff;   --b-fix-bd: #d03b3b;
+}
+@media (prefers-color-scheme: dark) {
+  .viz-root {
+    color-scheme: dark;
+    --surface-0: #111110;
+    --surface-1: #1a1a19;
+    --border: #2e2e2c;
+    --grid: #262624;
+    --text-primary: #f0efec;
+    --text-secondary: #c3c2b7;
+    --text-muted: #8f8e86;
+    --s-acq: #0a6e98;
+    --s-setup: #14a8b0;
+    --s-sel: #2a5ec4;
+    --s-job: #5b93e6;
+    --s-pmwork: #4a4ccf;
+    --s-review: #9580ec;
+    --s-proc: #0e99b8;
+    --s-contractor: #d9652a;
+    --s-wait: #3a3a37;
+    --s-wait-warm: #5a3a28;
+    --st-1: #3a3a37;
+    --st-2: #55544f;
+    --st-3: #7a7973;
+    --st-4: #a8a79f;
+    --st-5: #ecebe6;
+    --critical: #e66767;
+    --b-setup-bg: #1a1a19; --b-setup-fg: #f0efec; --b-setup-bd: #f0efec;
+    --b-spin-bg: #8f8e86;  --b-spin-fg: #111110;  --b-spin-bd: #8f8e86;
+    --b-opt-bg: #f0efec;   --b-opt-fg: #111110;   --b-opt-bd: #f0efec;
+    --b-fix-bg: #e66767;   --b-fix-fg: #111110;   --b-fix-bd: #e66767;
+  }
+}
+* { box-sizing: border-box; }
+body { margin: 0; }
+.viz-root {
+  font: 14px/1.4 -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+  background: var(--surface-0);
+  color: var(--text-primary);
+  min-height: 100vh;
+  padding: 28px;
+}
+h1 { font-size: 22px; margin: 0 0 4px; }
+.sub { color: var(--text-secondary); margin: 0 0 16px; }
+.sub a { color: inherit; }
+.controls { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 10px; }
+.pill {
+  border: 1px solid var(--border); background: var(--surface-1); color: var(--text-primary);
+  border-radius: 999px; padding: 6px 14px; font: inherit; cursor: pointer;
+}
+.pill[aria-pressed="true"] { background: var(--text-primary); color: var(--surface-1); border-color: var(--text-primary); }
+.legend { display: flex; gap: 6px 14px; flex-wrap: wrap; color: var(--text-secondary); font-size: 13px; margin: 0 0 14px; }
+.legend span { display: inline-flex; align-items: center; gap: 6px; }
+.sw { width: 12px; height: 12px; border-radius: 3px; display: inline-block; }
+.sw.hatch { background-image: repeating-linear-gradient(135deg, transparent 0 3px, var(--surface-1) 3px 5px) !important; border: 1px solid var(--st-3); }
+
+.layout { display: grid; grid-template-columns: minmax(760px, 1.9fr) minmax(400px, 1fr); gap: 20px; align-items: start; }
+@media (max-width: 1300px) { .layout { grid-template-columns: 1fr; } }
+
+.panel { background: var(--surface-1); border: 1px solid var(--border); border-radius: 12px; padding: 18px 20px; }
+.panel h2 { font-size: 16px; margin: 0 0 2px; }
+.panel .hint { color: var(--text-muted); font-size: 12.5px; margin: 0 0 12px; }
+
+.wheel { padding: 10px 0 6px; }
+.wheel + .wheel { border-top: 1px solid var(--grid); }
+.wheel-head { display: flex; align-items: baseline; gap: 10px; margin-bottom: 2px; }
+.wheel-head .name { font-weight: 650; font-size: 15px; }
+.wheel-head { position: relative; }
+.colhead { position: absolute; right: 0; left: calc(100% * 790 / 1010); display: flex; gap: 0; font-size: 11px; color: var(--text-muted); text-transform: uppercase; letter-spacing: .03em; white-space: nowrap; }
+.colhead span:first-child { width: calc(100% * 108 / 220); padding-right: 8px; }
+.colhead { gap: 6px; }
+.wheel-head .unit { color: var(--text-muted); font-size: 12.5px; }
+.wheel svg { display: block; width: 100%; height: auto; overflow: visible; }
+.axis svg { display: block; width: 100%; height: auto; }
+
+.ball {
+  display: inline-flex; align-items: center; justify-content: center;
+  min-width: 22px; height: 22px; border-radius: 11px; padding: 0 4px;
+  font-size: 11.5px; font-weight: 700; flex: none; border: 1.5px solid;
+}
+.ball.setup { background: var(--b-setup-bg); color: var(--b-setup-fg); border-color: var(--b-setup-bd); }
+.ball.spin  { background: var(--b-spin-bg);  color: var(--b-spin-fg);  border-color: var(--b-spin-bd); }
+.ball.opt   { background: var(--b-opt-bg);   color: var(--b-opt-fg);   border-color: var(--b-opt-bd); }
+.ball.fix   { background: var(--b-fix-bg);   color: var(--b-fix-fg);   border-color: var(--b-fix-bd); }
+
+.focus { display: grid; gap: 12px; }
+.quad { border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px; }
+.quad-head { display: flex; align-items: center; gap: 8px; }
+.quad-head h3 { font-size: 15px; margin: 0; }
+.quad-head .n { color: var(--text-muted); font-size: 12px; margin-left: auto; }
+.quad .desc { color: var(--text-muted); font-size: 12.5px; margin: 2px 0 6px; }
+.hours { font-size: 12.5px; color: var(--text-secondary); margin-bottom: 6px; }
+.hours .val { font-weight: 600; color: var(--text-primary); border: 1px dashed var(--border); border-radius: 4px; padding: 0 6px; }
+.items { list-style: none; margin: 0; padding: 0; }
+.items li { display: grid; grid-template-columns: 28px 1fr auto; gap: 8px; align-items: start; padding: 6px 0; border-top: 1px solid var(--grid); transition: opacity .15s; }
+.items li:first-child { border-top: 0; }
+.items .txt { font-size: 13px; }
+.items .where { display: block; font-size: 12px; color: var(--text-muted); }
+.tag { font-size: 11px; padding: 1px 7px; border-radius: 999px; border: 1px solid var(--border); color: var(--text-secondary); white-space: nowrap; }
+.tag.prog { border-color: var(--text-primary); color: var(--text-primary); }
+.tag.plan { border-style: dashed; }
+.tag.queue { background: var(--grid); }
+.tag.open { border-color: var(--critical); color: var(--critical); }
+.tag.open::before { content: "\26A0 "; }
+.dim { opacity: .2; }
+svg .mk { transition: opacity .15s; }
+
+#tip {
+  position: fixed; pointer-events: none; z-index: 10; display: none;
+  background: var(--surface-1); color: var(--text-primary); border: 1px solid var(--border);
+  border-radius: 8px; padding: 8px 10px; font-size: 12.5px; box-shadow: 0 4px 16px rgba(0,0,0,.12); max-width: 280px;
+}
+#tip .t { font-weight: 600; }
+#tip .m { color: var(--text-secondary); }
+details.panel { margin-top: 16px; }
+details.panel > summary { cursor: pointer; font-weight: 650; font-size: 15px; }
+details.panel > summary .hint { font-weight: 400; }
+.status-wrap svg { display: block; max-width: 720px; width: 100%; height: auto; }
+table { border-collapse: collapse; font-size: 12.5px; margin-top: 8px; }
+th, td { padding: 4px 8px; border-bottom: 1px solid var(--grid); text-align: right; }
+th:first-child, td:first-child { text-align: left; }
+th { color: var(--text-secondary); font-weight: 600; }
+.foot { color: var(--text-muted); font-size: 12px; margin-top: 12px; }
+</style>
+</head>
+<body>
+<div class="viz-root">
+  <h1>LSM Data Engine: wheels and current focus</h1>
+  <p class="sub">Source: <a href="https://neara.fibery.io/Shared/Note/LSM-Data-Engine-31902">LSM Data Engine</a> (Joshua Huang).
+    Wheels and focus: Network Model snapshot 3 Nov 2026, Veg Multimodal snapshot 5 Nov 2026. Job status: job cards on 18 Nov 2026.</p>
+
+  <div class="controls">
+    <button class="pill" data-case="best" aria-pressed="false">Best case</button>
+    <button class="pill" data-case="normal" aria-pressed="true">Normal case</button>
+  </div>
+
+  <div class="layout">
+    <section class="panel">
+      <h2>The wheels: time for one turn</h2>
+      <p class="hint">One bar is one sector (Network Model) or one job of ~50 areas (Veg). Stages run left to right. All bars share one scale. The strip above each wheel is its one-off setup. A numbered ball marks the exact stage that a focus item works on.</p>
+      <div class="legend" id="legend"></div>
+      <div id="wheels"></div>
+      <div class="axis" id="axis"></div>
+    </section>
+
+    <section class="panel">
+      <h2>Current focus</h2>
+      <p class="hint">Hover an item or a ball to highlight its pair.</p>
+      <div class="focus" id="focus"></div>
+    </section>
+  </div>
+
+
+  <details class="panel">
+    <summary>Work in progress by pipeline <span class="hint">(areas per contractor job state, 18 Nov)</span></summary>
+    <div class="legend" id="status-legend" style="margin-top:12px"></div>
+    <div class="status-wrap" id="status"></div>
+  </details>
+
+  <details class="panel">
+    <summary>Data table: working days per stage</summary>
+    <div id="table"></div>
+  </details>
+
+  <p class="foot">Working days of 8 h. TBD stages count as 0. Very short stages are drawn at a minimum width so they stay visible. Bars exclude one-off setup and unexpected blockers. Hours per week is not in the source note.</p>
+  <div id="tip"></div>
+</div>
+
+<script>
+// ---------- Data ----------
+const STAGES = [
+  { name: "Data acquisition (action)",    c: "--s-acq",        type: "PM / internal" },
+  { name: "Data acquisition (wait)",      c: "--s-wait",       type: "Wait", hatch: true },
+  { name: "Data / project setup",         c: "--s-setup",      type: "PM / internal" },
+  { name: "Data selection",               c: "--s-sel",        type: "PM / internal" },
+  { name: "Contractor job creation",      c: "--s-job",        type: "PM / internal" },
+  { name: "Contractor queue (wait)",      c: "--s-wait-warm",  type: "Wait", hatch: true, warm: true },
+  { name: "Contractor work (contractor)", c: "--s-contractor", type: "Contractor" },
+  { name: "Contractor work (PM)",         c: "--s-pmwork",     type: "PM / internal" },
+  { name: "Review / QA",                  c: "--s-review",     type: "PM / internal" },
+  { name: "Data processing + download",   c: "--s-proc",       type: "PM / internal" },
+];
+const S = Object.fromEntries(STAGES.map((s, i) => [s.name, i]));
+const SETUP_STEPS = ["Source", "Policy", "SOP", "Tooling", "Template", "Calibration", "Training", "Scripts"];
+const SETUP_STATE = {
+  done: { label: "Done", fill: "--st-5", text: "--surface-1" },
+  prog: { label: "In progress", fill: "--st-3", text: "--text-primary" },
+  plan: { label: "Planned or not landed", fill: "--surface-1", text: "--text-secondary", dash: true },
+  na:   { label: "Not stated in the note", fill: "--surface-1", text: "--text-muted", dot: true },
+};
+const T = null; // TBD
+
+const WHEELS = [
+  { key: "nm", name: "Network Model", unit: "per sector (~10 areas)",
+    setup: { Source: "done", Policy: "prog", SOP: "na", Tooling: "prog", Template: "done", Calibration: "done", Training: "plan", Scripts: "na" },
+    rings: [
+      { key: "train", label: "Training data", areas: 10, vol: { done: 74, total: 84, doneL: "done", totalL: "train areas in jobs" },
+        best:   [0.01, 0.03, 0.06, 0.21, 0.06, 1, 3, 0.17, 0.31, 0],
+        normal: [0.05, 0.3,  0.06, 0.21, 0.06, 3, 5, 0.42, 0.63, 0.01] },
+      { key: "golden", label: "Golden data", areas: 10, vol: { done: 54, total: 66, doneL: "reviewed to G1/G2", totalL: "eval areas" },
+        best:   [0.01, 0.03, 0.06, 0.21, 0.06, 1, 3, 0.17, 3.75, 0],
+        normal: [0.05, 0.3,  0.06, 0.21, 0.06, 3, 5, 0.42, 7.5,  0.01] },
+    ] },
+  { key: "v21", name: "PC Veg 2.1 Classification", unit: "per job (~50 areas)",
+    setup: { Source: "done", Policy: "done", SOP: "done", Tooling: "done", Template: "done", Calibration: "done", Training: "done", Scripts: "na" },
+    rings: [{ key: "job", label: "One job", areas: 50, vol: { done: 565, total: 645, doneL: "done", totalL: "areas in 7 jobs" },
+      best:   [0.13, 1, 0.06, 0.52, 0.03, 1, 3, 0.17, 1.04, 0.04],
+      normal: [0.38, 3, 0.13, 1.04, 0.06, 3, 5, 0.42, 3.13, 0.05] }] },
+  { key: "is", name: "PC Instance Segmentation", unit: "per job (~50 areas)",
+    setup: { Source: "done", Policy: "done", SOP: "done", Tooling: "done", Template: "done", Calibration: "done", Training: "done", Scripts: "plan" },
+    rings: [{ key: "job", label: "One job", areas: 50, vol: { done: 47, total: 223, doneL: "done", totalL: "areas in 5 jobs" },
+      best:   [0, 0, 0.03, 0, 0.06, 1, 3, 0.17, 1.04, 0.04],
+      normal: [0, 0, 0.03, 0, 0.06, 3, 5, 0.42, 3.13, 0.05] }] },
+  { key: "mm", name: "Multimodal Tree Type Labelling", unit: "per job (~50 areas)",
+    setup: { Source: "done", Policy: "prog", SOP: "prog", Tooling: "done", Template: "prog", Calibration: "done", Training: "plan", Scripts: "plan" },
+    rings: [{ key: "job", label: "One job", areas: 50, vol: { done: 0, total: 0, doneL: "done", totalL: "1 job open, areas TBD" },
+      best:   [T, T, 0.03, 0, 0.06, 1, T, 0.17, T, 0.04],
+      normal: [T, T, 0.03, 0, 0.06, 3, T, 0.42, T, 0.05] }] },
+];
+const WNAME = Object.fromEntries(WHEELS.map(w => [w.key, w.name]));
+
+// at: { w, ring, stage } for a turn stage, or { w, setup } for a setup step.
+const ALL = ["nm", "v21", "is", "mm"];
+const SECTIONS = [
+  { key: "setup", title: "Setting up the wheel",
+    desc: "One-off effort for a new vertical or data modality. One-off size: Network Model 66 to 113 h. Veg Multimodal 194 to 319 h.",
+    items: [
+      { t: "Labelling policy creation", s: "prog", at: [{ w: "nm", setup: "Policy" }] },
+      { t: "Tooling for usage labelling", s: "prog", at: [{ w: "nm", setup: "Tooling" }] },
+      { t: "Contractor training", s: "plan", at: [{ w: "nm", setup: "Training" }] },
+      { t: "Labelling policy and SOP", s: "prog", at: [{ w: "mm", setup: "Policy" }, { w: "mm", setup: "SOP" }] },
+      { t: "Setup of the first contractor job", s: "prog", at: [{ w: "mm", setup: "Template" }] },
+      { t: "Contractor training, once the first contractor job goes out", s: "plan", at: [{ w: "mm", setup: "Training" }] },
+    ] },
+  { key: "spin", title: "Keeping the wheel spinning",
+    desc: "Steady effort per sector or job.",
+    items: [
+      { t: "QA of the first job #2418 (50 areas)", s: "prog", at: [{ w: "is", ring: "job", stage: "Review / QA" }] },
+      { t: "46 training areas In Review", s: "queue", at: [{ w: "nm", ring: "train", stage: "Review / QA" }] },
+      { t: "28 training areas in contractor QC", s: "queue", at: [{ w: "nm", ring: "train", stage: "Contractor work (contractor)" }] },
+      { t: "2 of 14 policy questions in job tickets not answered", s: "queue", at: [{ w: "nm", ring: "train", stage: "Contractor work (PM)" }] },
+      { t: "300 areas In Review (#2322, #2329)", s: "queue", at: [{ w: "v21", ring: "job", stage: "Review / QA" }] },
+      { t: "120 areas with contractors: 80 in progress, 40 in QC", s: "queue", at: [{ w: "v21", ring: "job", stage: "Contractor work (contractor)" }] },
+      { t: "3 jobs in Triage (126 areas)", s: "queue", at: [{ w: "is", ring: "job", stage: "Contractor queue (wait)" }] },
+    ] },
+  { key: "opt", title: "Optimising the wheel",
+    desc: "Planned work that reduces known bottlenecks.",
+    items: [
+      { t: "Remove the review / QA bottleneck", s: "plan", at: [{ w: "nm", ring: "golden", stage: "Review / QA" }] },
+      { t: "Fix up QA tags", s: "prog", at: [{ w: "nm", ring: "golden", stage: "Review / QA" }] },
+      { t: "Continuous improvement of the calibration docs", s: "prog",
+        at: ALL.map(w => ({ w, ring: w === "nm" ? "train" : "job", stage: "Contractor work (PM)" })) },
+      { t: "Migrate the Current Progress snapshot to a live Cubez dashboard", s: "plan",
+        at: ALL.map(w => ({ w, ring: w === "nm" ? "golden" : "job", stage: "Data processing + download" })) },
+    ] },
+  { key: "fix", title: "Fixing things that are broken",
+    desc: "Unplanned, reactive work when something stops the wheel.",
+    items: [
+      { t: "Job #2329 (100 areas, SCE): rework requested 4 Nov", s: "open", at: [{ w: "v21", ring: "job", stage: "Review / QA" }] },
+      { t: "Job #2453 (10 areas): Blocked / On Hold", s: "open", at: [{ w: "nm", ring: "train", stage: "Contractor work (contractor)" }] },
+      { t: "7 of 14 issue-warden tickets open", s: "open", at: [{ w: "nm", ring: "train", stage: "Contractor work (contractor)" }] },
+      { t: "6 of 18 tooling issues from job tickets open", s: "open", at: [{ w: "nm", ring: "train", stage: "Contractor work (contractor)" }] },
+    ] },
+];
+let num = 0;
+SECTIONS.forEach(sec => sec.items.forEach(it => { it.n = ++num; it.sec = sec.key; }));
+const ITEMS = SECTIONS.flatMap(s => s.items);
+const TAG = { prog: "In progress", plan: "Planned", queue: "In queue", open: "Open" };
+const SEC_LABEL = Object.fromEntries(SECTIONS.map(s => [s.key, s.title]));
+
+// Pipeline status (areas per contractor job state).
+const STATES = [
+  ["Under Construction", "--surface-1"], ["Open", "--st-1"], ["In Progress", "--st-2"], ["Contractor QC", "--st-3"],
+  ["In Review", "--st-4"], ["Done", "--st-5"], ["Blocked / On Hold", "--critical"],
+];
+const STATUS = [
+  { label: "Network Model v1", sub: "7 jobs", v: { "Done": 74 }, jobs: { "Done": 7 } },
+  { label: "Network Model v2", sub: "7 jobs, same projects", v: { "Under Construction": 27, "Open": 47 }, jobs: { "Under Construction": 2, "Open": 5 } },
+  { label: "PC Veg 2.1", sub: "7 jobs", v: { "Contractor QC": 80, "Done": 565 }, jobs: { "Contractor QC": 2, "Done": 5 } },
+  { label: "PC Instance Seg", sub: "5 jobs", v: { "Contractor QC": 176, "Done": 47 }, jobs: { "Contractor QC": 4, "Done": 1 } },
+  { label: "Multimodal", sub: "areas TBD", v: {}, open: "1 Open job" },
+];
+
+
+// ---------- Helpers ----------
+let CASE = "normal";
+const tip = document.getElementById("tip");
+const fmt = x => (Math.round(x * 100) / 100).toString();
+const enc = s => encodeURIComponent(s);
+function showTip(e, html) {
+  tip.innerHTML = html; tip.style.display = "block";
+  const x = Math.min(e.clientX + 14, innerWidth - tip.offsetWidth - 8);
+  tip.style.left = x + "px"; tip.style.top = (e.clientY + 14) + "px";
+}
+const ballHTML = it => `<span class="ball ${it.sec}">${it.n}</span>`;
+const BALL_VARS = { setup: "setup", spin: "spin", opt: "opt", fix: "fix" };
+function ballSVG(it, x, y) {
+  const k = BALL_VARS[it.sec];
+  const w = it.n >= 10 ? 24 : 20;
+  return `<g class="mk" data-n="${it.n}" data-tip="${enc(`<div class="t">${it.n}. ${it.t}</div><div class="m">${SEC_LABEL[it.sec]} · ${TAG[it.s]}</div>`)}">
+    <rect x="${x - w / 2}" y="${y - 10}" width="${w}" height="20" rx="10" fill="var(--b-${k}-bg)" stroke="var(--b-${k}-bd)" stroke-width="1.5"/>
+    <text x="${x}" y="${y + 4}" text-anchor="middle" font-size="11" font-weight="700" fill="var(--b-${k}-fg)" pointer-events="none">${it.n}</text></g>`;
+}
+// Spread balls so they do not overlap. Returns ball x positions.
+function spread(targets, minX, maxX, gap = 25) {
+  const order = targets.map((t, i) => ({ t, i })).sort((a, b) => a.t - b.t);
+  const out = new Array(targets.length);
+  let prev = -Infinity;
+  order.forEach(o => { const x = Math.max(o.t, prev + gap, minX); out[o.i] = x; prev = x; });
+  let over = prev - maxX;
+  if (over > 0) for (let k = order.length - 1; k >= 0; k--) {
+    const i = order[k].i; out[i] -= over;
+    const prevI = k > 0 ? order[k - 1].i : null;
+    if (prevI === null) break;
+    over = Math.max(0, out[prevI] + gap - out[i]);
+  }
+  return out;
+}
+function itemsAt(pred) {
+  const res = [];
+  ITEMS.forEach(it => it.at.forEach(a => { if (pred(a)) res.push(it); }));
+  return res;
+}
+
+// ---------- Geometry ----------
+const W = 1010, LABEL = 110, PLOT_R = 640, MX = 790, TOTAL_W = W - PLOT_R;
+const BAR_H = 26, LANE = 30, MIN_SEG = 7, GAP = 2;
+const sum = a => a.reduce((x, y) => x + (y || 0), 0);
+function maxTotal() {
+  return Math.max(...WHEELS.flatMap(w => w.rings.flatMap(r => [sum(r.best), sum(r.normal)])));
+}
+const XMAX = Math.ceil(maxTotal());
+const px = d => d / XMAX * (PLOT_R - LABEL);
+
+function segments(vals) {
+  let x = LABEL;
+  return vals.map((v, i) => {
+    if (!v) return { i, v, x, w: 0 };
+    const w = Math.max(px(v), MIN_SEG);
+    const seg = { i, v, x, w };
+    x += w + GAP;
+    return seg;
+  });
+}
+
+// ---------- Render: wheels ----------
+function renderLegend() {
+  const sw = st => `<i class="sw${st.hatch ? " hatch" : ""}" style="background:var(${st.c})"></i>`;
+  const pm = STAGES.filter(st => st.type === "PM / internal");
+  const con = STAGES.filter(st => st.type === "Contractor" || st.warm);
+  const wait = STAGES.filter(st => st.hatch && !st.warm);
+  const group = (title, list) => `<span style="font-weight:600;color:var(--text-primary)">${title}:</span>` +
+    list.map(st => `<span>${sw(st)}${st.name}</span>`).join("");
+  document.getElementById("legend").innerHTML =
+    `<div style="display:flex;flex-wrap:wrap;gap:6px 14px;width:100%">${group("PM / internal", pm)}</div>` +
+    `<div style="display:flex;flex-wrap:wrap;gap:6px 14px;width:100%">${group("Contractor", con)}${group("Other wait", wait)}</div>` +
+    `<div style="display:flex;flex-wrap:wrap;gap:6px 14px;width:100%"><span style="font-weight:600;color:var(--text-primary)">Balls:</span>` +
+    SECTIONS.map(sec => `<span><span class="ball ${sec.key}" style="min-width:16px;height:16px;font-size:9px">#</span>${sec.title}</span>`).join("") + `</div>`;
+}
+
+function setupSVG(w) {
+  const n = SETUP_STEPS.length, gap = 4;
+  const cw = (PLOT_R - LABEL - gap * (n - 1)) / n, h = 20;
+  const balls = [];
+  let cells = "";
+  SETUP_STEPS.forEach((step, k) => {
+    const st = SETUP_STATE[w.setup[step]];
+    const x = LABEL + k * (cw + gap);
+    cells += `<g data-tip="${enc(`<div class="t">Setup: ${step}</div><div class="m">${st.label}</div>`)}">
+      <rect x="${x}" y="${LANE}" width="${cw}" height="${h}" rx="4" fill="var(${st.fill})" stroke="var(--st-3)" stroke-width="${st.fill === "--surface-1" ? 1 : 0}" ${st.dash ? 'stroke-dasharray="4 3"' : ""} ${st.dot ? 'stroke-dasharray="1.5 2.5"' : ""}/>
+      <text x="${x + cw / 2}" y="${LANE + 14}" text-anchor="middle" font-size="11" fill="var(${st.text})" pointer-events="none">${step}</text></g>`;
+    itemsAt(a => a.w === w.key && a.setup === step).forEach(it => balls.push({ it, t: x + cw / 2 }));
+  });
+  const xs = spread(balls.map(b => b.t), LABEL + 10, PLOT_R - 10);
+  const marks = balls.map((b, i) => `<line class="mk" data-n="${b.it.n}" x1="${xs[i]}" y1="${LANE - 6}" x2="${b.t}" y2="${LANE}" stroke="var(--text-muted)" stroke-width="1"/>` + ballSVG(b.it, xs[i], LANE - 16)).join("");
+  return `<text x="0" y="${LANE + 14}" font-size="12" fill="var(--text-secondary)">One-off setup</text>${cells}${marks}`;
+}
+
+function ringSVG(w, r, y0) {
+  const vals = r[CASE];
+  const segs = segments(vals);
+  const total = vals.reduce((a, b) => a + (b || 0), 0);
+  const tbd = STAGES.filter((_, i) => vals[i] === null).map(s => s.name);
+  const by = y0 + LANE;
+  let out = `<text x="0" y="${by + BAR_H / 2 + 4}" font-size="12.5" fill="var(--text-secondary)">${r.label}</text>`;
+  segs.filter(s => s.w).forEach(s => {
+    const st = STAGES[s.i];
+    const fill = st.hatch ? (st.warm ? `url(#hatchWarm)` : `url(#hatch)`) : `var(${st.c})`;
+    out += `<rect x="${s.x}" y="${by}" width="${s.w}" height="${BAR_H}" rx="4" fill="${fill}" data-tip="${enc(
+      `<div class="t">${st.name}</div><div class="m">${fmt(s.v)} working days · ${st.type}</div>`)}"/>`;
+  });
+  const end = segs.filter(s => s.w).reduce((m, s) => Math.max(m, s.x + s.w), LABEL);
+  out += `<text x="${end + 8}" y="${by + BAR_H / 2 - 1}" font-size="13" font-weight="700" fill="var(--text-primary)">${fmt(total)} days${tbd.length ? " + TBD" : ""}</text>`;
+  out += `<text x="${end + 8}" y="${by + BAR_H / 2 + 13}" font-size="11" fill="var(--text-muted)" ${tbd.length ? `data-tip="${enc(`<div class="t">TBD stages</div><div class="m">${tbd.join("<br>")}</div>`)}"` : ""}>${tbd.length ? tbd.length + " stages TBD" : "per turn"}</text>`;
+  out += metricsSVG(r, vals, by);
+  // Balls: one per item at this ring + stage.
+  const balls = [];
+  segs.forEach(s => itemsAt(a => a.w === w.key && a.ring === r.key && S[a.stage] === s.i)
+    .forEach(it => balls.push({ it, t: s.w ? s.x + s.w / 2 : s.x, seg: s })));
+  const xs = spread(balls.map(b => b.t), LABEL + 10, PLOT_R);
+  balls.forEach((b, i) => {
+    out += `<line class="mk" data-n="${b.it.n}" x1="${xs[i]}" y1="${by - 6}" x2="${b.t}" y2="${by}" stroke="var(--text-muted)" stroke-width="1"/>`;
+    out += ballSVG(b.it, xs[i], by - 16);
+  });
+  return out;
+}
+
+// ROI per turn: areas / PM-internal days, areas / contractor days. Plus current volume.
+function metricsSVG(r, vals, by) {
+  let pm = 0, con = 0, pmTbd = false, conTbd = false;
+  vals.forEach((v, i) => {
+    const t = STAGES[i].type;
+    if (t === "PM / internal") { pm += v || 0; if (v === null) pmTbd = true; }
+    if (t === "Contractor") { con += v || 0; if (v === null) conTbd = true; }
+  });
+  const roi = (d, tbd) => tbd || !d ? "TBD" : fmt(r.areas / d);
+  const cy = by + BAR_H / 2;
+  const tipRoi = enc(`<div class="t">Areas per working day</div><div class="m">${r.areas} areas per turn.<br>PM / internal: ${fmt(pm)} d${pmTbd ? " + TBD" : ""}.<br>Contractor: ${con ? fmt(con) + " d" : "TBD"} (elapsed working days, not person-days).</div>`);
+  const pct = r.vol.total ? r.vol.done / r.vol.total : 0, bw = 70;
+  const tipVol = enc(`<div class="t">Current volume</div><div class="m">${r.vol.done} ${r.vol.doneL}<br>${r.vol.total} ${r.vol.totalL}</div>`);
+  return `<line x1="${MX - 12}" x2="${MX - 12}" y1="${by - 4}" y2="${by + BAR_H + 4}" stroke="var(--grid)"/>
+    <g data-tip="${tipRoi}">
+      <rect x="${MX}" y="${by - 2}" width="96" height="${BAR_H + 4}" fill="transparent"/>
+      <text x="${MX}" y="${cy - 1}" font-size="13" font-weight="700" fill="var(--text-primary)">${roi(pm, pmTbd)}<tspan font-size="11" font-weight="400" fill="var(--text-secondary)"> / PM day</tspan></text>
+      <text x="${MX}" y="${cy + 13}" font-size="13" font-weight="700" fill="var(--text-primary)">${roi(con, conTbd)}<tspan font-size="11" font-weight="400" fill="var(--text-secondary)"> / contr. day</tspan></text>
+    </g>
+    <g data-tip="${tipVol}">
+      <rect x="${MX + 108}" y="${by - 2}" width="${W - MX - 108}" height="${BAR_H + 4}" fill="transparent"/>
+      <text x="${MX + 108}" y="${cy - 1}" font-size="13" font-weight="700" fill="var(--text-primary)">${r.vol.total ? `${r.vol.done}<tspan font-weight="400" fill="var(--text-secondary)"> / ${r.vol.total}</tspan>` : `<tspan font-weight="400" fill="var(--text-muted)">None yet</tspan>`}</text>
+      <rect x="${MX + 108}" y="${cy + 5}" width="${bw}" height="6" rx="3" fill="var(--grid)"/>
+      ${pct ? `<rect x="${MX + 108}" y="${cy + 5}" width="${Math.max(bw * pct, 6)}" height="6" rx="3" fill="var(--st-5)"/>` : ""}
+    </g>`;
+}
+
+function renderWheels() {
+  const host = document.getElementById("wheels");
+  host.innerHTML = WHEELS.map(w => {
+    const ringH = LANE + BAR_H + 10;
+    const H = LANE + 20 + 8 + ringH * w.rings.length;
+    let body = setupSVG(w);
+    w.rings.forEach((r, k) => { body += ringSVG(w, r, LANE + 28 + k * ringH); });
+    const grid = [...Array(XMAX + 1).keys()].filter(d => d % 2 === 0).map(d =>
+      `<line x1="${LABEL + px(d)}" x2="${LABEL + px(d)}" y1="${LANE + 28}" y2="${H}" stroke="var(--grid)"/>`).join("");
+    return `<div class="wheel" data-w="${w.key}">
+      <div class="wheel-head"><span class="name">${w.name}</span><span class="unit">${w.unit}</span>${w === WHEELS[0] ? `<span class="colhead">
+        <span title="Areas produced per working day, per turn">Areas per day</span><span title="Areas done out of areas in the pipeline">Volume done / total</span></span>` : ""}</div>
+      <svg viewBox="0 0 ${W} ${H}" role="img" aria-label="${w.name}: time per stage">
+        <defs><pattern id="hatch" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+          <rect width="6" height="6" fill="var(--s-wait)"/><line x1="0" y1="0" x2="0" y2="6" stroke="var(--surface-1)" stroke-width="2"/></pattern>
+        <pattern id="hatchWarm" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+          <rect width="6" height="6" fill="var(--s-wait-warm)"/><line x1="0" y1="0" x2="0" y2="6" stroke="var(--surface-1)" stroke-width="2"/></pattern></defs>
+        ${grid}${body}
+      </svg></div>`;
+  }).join("");
+  const ticks = [...Array(XMAX + 1).keys()].filter(d => d % 2 === 0).map(d =>
+    `<text x="${LABEL + px(d)}" y="14" text-anchor="middle" font-size="11" fill="var(--text-secondary)">${d}</text>`).join("");
+  document.getElementById("axis").innerHTML = `<svg viewBox="0 0 ${W} 36">${ticks}
+    <text x="${LABEL + (PLOT_R - LABEL) / 2}" y="32" text-anchor="middle" font-size="12" fill="var(--text-secondary)">Working days</text></svg>`;
+}
+
+// ---------- Render: focus ----------
+function whereText(it) {
+  const parts = it.at.map(a => {
+    const w = WHEELS.find(x => x.key === a.w);
+    if (a.setup) return `${w.name} · setup: ${a.setup}`;
+    const ring = w.rings.length > 1 ? " " + w.rings.find(r => r.key === a.ring).label.toLowerCase() : "";
+    return `${w.name}${ring} · ${a.stage}`;
+  });
+  if (it.at.length > 2) return `All wheels · ${it.at[0].stage}`;
+  return [...new Set(parts)].join("<br>");
+}
+function renderFocus() {
+  document.getElementById("focus").innerHTML = SECTIONS.map(sec => `<div class="quad">
+    <div class="quad-head"><span class="ball ${sec.key}" style="min-width:14px;height:14px;padding:0"></span><h3>${sec.title}</h3><span class="n">${sec.items.length} items</span></div>
+    <p class="desc">${sec.desc}</p>
+    <div class="hours">Hours per week: <span class="val">&lt;to fill&gt;</span></div>
+    <ul class="items">${sec.items.map(it => `<li data-n="${it.n}">
+      ${ballHTML(it)}
+      <span class="txt">${it.t}<span class="where">${whereText(it)}</span></span>
+      <span class="tag ${it.s}">${TAG[it.s]}</span></li>`).join("")}</ul>
+  </div>`).join("");
+}
+
+// ---------- Render: status (vertical bars) ----------
+const jobsText = n => `${n} job${n === 1 ? "" : "s"}`;
+function renderStatus() {
+  document.getElementById("status-legend").innerHTML = STATES.map(([s, c]) =>
+    `<span><i class="sw" style="background:var(${c})${s === "Under Construction" ? ";border:1.5px dashed var(--st-3)" : ""}"></i>${s === "Blocked / On Hold" ? "⚠ " : ""}${s}</span>`).join("");
+  const Wd = 720, H = 300, L = 44, B = 40, top = 20, plotH = H - B - top;
+  const max = 700, colW = 70, slot = (Wd - L) / STATUS.length;
+  const y = v => top + plotH - v / max * plotH;
+  let g = "";
+  [0, 100, 200, 300, 400, 500, 600, 700].forEach(v => {
+    g += `<line x1="${L}" x2="${Wd}" y1="${y(v)}" y2="${y(v)}" stroke="var(--grid)"/>
+      <text x="${L - 6}" y="${y(v) + 4}" text-anchor="end" font-size="11" fill="var(--text-secondary)">${v}</text>`;
+  });
+  STATUS.forEach((p, k) => {
+    const cx = L + slot * k + slot / 2, x = cx - colW / 2;
+    let acc = 0;
+    const segs = STATES.filter(([s]) => p.v[s]);
+    segs.forEach(([s, c], j) => {
+      const v = p.v[s], y1 = y(acc + v), h = y(acc) - y1 - (j < segs.length - 1 ? 2 : 0);
+      const isTop = j === segs.length - 1;
+      g += `<path d="M${x},${y1 + h} V${y1 + (isTop ? 4 : 0)} ${isTop ? `Q${x},${y1} ${x + 4},${y1} H${x + colW - 4} Q${x + colW},${y1} ${x + colW},${y1 + 4}` : `H${x + colW}`} V${y1 + h} Z"
+        fill="var(${c})" ${s === "Under Construction" ? 'stroke="var(--st-3)" stroke-width="1.5" stroke-dasharray="4 3"' : ""} data-tip="${enc(`<div class="t">${p.label}: ${s}</div><div class="m">${jobsText(p.jobs[s])}, ${v} areas</div>`)}"/>`;
+      if (h >= 16) {
+        const ink = s === "Done" || s === "In Review" ? "--surface-1" : "--text-primary";
+        g += `<text x="${x + colW / 2}" y="${y1 + h / 2 + 4}" text-anchor="middle" font-size="11" font-weight="600" fill="var(${ink})" pointer-events="none">${jobsText(p.jobs[s])}</text>`;
+      }
+      acc += v;
+    });
+    const total = acc;
+    // A job with no area count yet is drawn as a fixed dashed block, so it is visible without implying a size.
+    if (!total && p.open) {
+      g += `<rect x="${x}" y="${y(60)}" width="${colW}" height="${y(0) - y(60)}" rx="4" fill="var(--surface-1)" stroke="var(--st-3)" stroke-width="1.5" stroke-dasharray="4 3" data-tip="${enc(`<div class="t">${p.label}: Open</div><div class="m">${p.open}, area count not on the card yet</div>`)}"/>
+        <text x="${cx}" y="${y(60) - 6}" text-anchor="middle" font-size="12.5" font-weight="700" fill="var(--text-primary)">${p.open}</text>`;
+    }
+    g += `${total || !p.open ? `<text x="${cx}" y="${y(total) - 6}" text-anchor="middle" font-size="12.5" font-weight="700" fill="var(--text-primary)">${total ? total + " areas" : "0"}</text>` : ""}
+      <text x="${cx}" y="${H - B + 16}" text-anchor="middle" font-size="12" fill="var(--text-primary)">${p.label}</text>
+      <text x="${cx}" y="${H - B + 30}" text-anchor="middle" font-size="11" fill="var(--text-muted)">${p.sub}</text>`;
+  });
+  g += `<line x1="${L}" x2="${Wd}" y1="${y(0)}" y2="${y(0)}" stroke="var(--text-muted)"/>`;
+  document.getElementById("status").innerHTML = `<svg viewBox="0 0 ${Wd} ${H}" role="img" aria-label="Areas per contractor job state">${g}</svg>`;
+}
+
+// ---------- Render: table ----------
+function renderTable() {
+  const cols = [];
+  WHEELS.forEach(w => w.rings.forEach(r => cols.push({ name: w.name + (w.rings.length > 1 ? ": " + r.label : ""), r })));
+  let h = `<table><tr><th>Stage</th>${cols.map(c => `<th>${c.name}<br>best</th><th>normal</th>`).join("")}</tr>`;
+  STAGES.forEach((s, i) => {
+    h += `<tr><td>${s.name}</td>${cols.map(c => `<td>${c.r.best[i] ?? "TBD"}</td><td>${c.r.normal[i] ?? "TBD"}</td>`).join("")}</tr>`;
+  });
+  h += `<tr><th>Total</th>${cols.map(c => ["best", "normal"].map(k =>
+    `<th>${fmt(c.r[k].reduce((a, b) => a + (b || 0), 0))}</th>`).join("")).join("")}</tr></table>`;
+  document.getElementById("table").innerHTML = h;
+}
+
+// ---------- Interaction ----------
+document.querySelectorAll("[data-case]").forEach(b => b.addEventListener("click", () => {
+  CASE = b.dataset.case;
+  document.querySelectorAll("[data-case]").forEach(x => x.setAttribute("aria-pressed", x === b));
+  renderWheels();
+}));
+document.addEventListener("mousemove", e => {
+  const t = e.target.closest("[data-tip]");
+  if (t) showTip(e, decodeURIComponent(t.dataset.tip)); else tip.style.display = "none";
+});
+function highlight(n) {
+  document.querySelectorAll(".mk, .items li").forEach(el => el.classList.toggle("dim", n !== null && el.dataset.n !== n));
+}
+document.addEventListener("mouseover", e => {
+  const el = e.target.closest(".mk, .items li");
+  highlight(el ? el.dataset.n : null);
+});
+
+renderLegend();
+renderWheels();
+renderFocus();
+renderStatus();
+renderTable();
+</script>
+</body>
+</html>
